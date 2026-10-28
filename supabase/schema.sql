@@ -1,0 +1,2 @@
+-- GulfFreelance schema pointer.
+-- Apply supabase/migrations/20260917_rebuild_core.sql in Supabase SQL Editor.

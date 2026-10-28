@@ -1,0 +1,10 @@
+"use server";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth";
+import { safeText } from "@/lib/utils";
+
+export async function applyJobAction(formData:FormData){const locale=safeText(formData.get("locale"),2)||"en";const jobId=safeText(formData.get("job_id"),80);const {supabase,user}=await requireUser(locale);const {error}=await supabase.from("job_applications").insert({job_id:jobId,applicant_id:user.id,cv_id:safeText(formData.get("cv_id"),80)||null,cover_letter:safeText(formData.get("cover_letter"),5000),status:"submitted"});if(error)redirect(`/${locale}/jobs/${jobId}?error=${encodeURIComponent(error.message)}`);revalidatePath(`/${locale}/jobs/${jobId}`);redirect(`/${locale}/jobs/${jobId}?applied=1`)}
+export async function saveJobAction(formData:FormData){const locale=safeText(formData.get("locale"),2)||"en";const jobId=safeText(formData.get("job_id"),80);const {supabase,user}=await requireUser(locale);await supabase.from("saved_jobs").upsert({user_id:user.id,job_id:jobId},{onConflict:"user_id,job_id"});revalidatePath(`/${locale}/jobs/${jobId}`)}
+export async function unsaveJobAction(formData:FormData){const locale=safeText(formData.get("locale"),2)||"en";const jobId=safeText(formData.get("job_id"),80);const {supabase,user}=await requireUser(locale);await supabase.from("saved_jobs").delete().eq("user_id",user.id).eq("job_id",jobId);revalidatePath(`/${locale}/jobs/${jobId}`)}
+export async function updateApplicationStatusAction(formData:FormData){const locale=safeText(formData.get("locale"),2)||"en";const jobId=safeText(formData.get("job_id"),80);const applicationId=safeText(formData.get("application_id"),80);const status=safeText(formData.get("status"),30);const allowed=["submitted","reviewing","shortlisted","rejected","hired"];if(!allowed.includes(status))return;const {supabase}=await requireUser(locale);await supabase.from("job_applications").update({status,updated_at:new Date().toISOString()}).eq("id",applicationId);revalidatePath(`/${locale}/jobs/${jobId}`)}

@@ -1,0 +1,16 @@
+GULFFREELANCE YENIDEN KURULUM
+
+1) Bu ZIP dosyasini cikart.
+2) ZIP icindeki tum dosya ve klasorleri su klasore kopyala:
+   C:\Users\Oner\Desktop\Projects\gulf-freelance
+3) Windows sorarsa mevcut dosyalari DEGISTIR / REPLACE et.
+4) .git klasorunu silme. Varsa .env.local dosyasini silme veya paylasma.
+5) CMD ac ve su komutlari calistir:
+   cd C:\Users\Oner\Desktop\Projects\gulf-freelance
+   npm install
+   npm run lint
+   npm run typecheck
+   npm run build
+6) Supabase baglantisini kurmadan once README.md ve PROJECT_REPORT.md dosyalarini oku.
+
+NOT: Odeme sistemi bilerek eklenmedi. Eski projenin kayitli durumuna gore auth, is ilanlari, basvurular, freelance hizmetler, CV, mesajlasma, saved jobs, dashboard, admin, Arapca/RTL ve SEO yeniden olusturuldu.

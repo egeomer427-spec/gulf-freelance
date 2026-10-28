@@ -1,0 +1,7 @@
+import { registerAction } from "./actions";
+import { normalizeLocale } from "@/lib/i18n";
+
+export default async function RegisterPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const locale = normalizeLocale((await params).locale); const q = await searchParams; const error = typeof q.error === "string" ? q.error : "";
+  return <section className="mx-auto max-w-lg px-4 py-16"><div className="card"><h1 className="text-3xl font-black text-white">Create account</h1>{error && <p className="mt-4 rounded-xl bg-red-400/10 p-3 text-sm text-red-200">{error}</p>}<form action={registerAction} className="mt-6 space-y-4"><input type="hidden" name="locale" value={locale}/><label><span className="label">Name</span><input className="input" name="displayName" required/></label><label><span className="label">Email</span><input className="input" name="email" type="email" required/></label><label><span className="label">Password</span><input className="input" name="password" type="password" minLength={8} required/></label><label><span className="label">I mainly want to</span><select className="input" name="role" defaultValue="job_seeker"><option value="job_seeker">Find a job</option><option value="freelancer">Sell freelance services</option><option value="employer">Hire employees</option><option value="client">Hire freelancers</option></select></label><button className="btn-primary w-full">Create account</button></form></div></section>;
+}

@@ -1,0 +1,6 @@
+import CvUpload from "@/components/CvUpload";
+import { requireUser } from "@/lib/auth";
+import { normalizeLocale } from "@/lib/i18n";
+import { deleteCvAction } from "./actions";
+export const dynamic="force-dynamic";
+export default async function Page({params}:{params:Promise<{locale:string}>}){const locale=normalizeLocale((await params).locale);const {supabase,user}=await requireUser(locale);const {data:cvs}=await supabase.from("cvs").select("*").eq("user_id",user.id).order("created_at",{ascending:false});return <section className="mx-auto max-w-3xl px-4 py-12"><h1 className="text-3xl font-black text-white">CV manager</h1><p className="mt-2 text-slate-400">Upload private CV files and select them when applying to jobs.</p><div className="mt-6"><CvUpload/></div><div className="mt-7 space-y-3">{(cvs||[]).map(cv=><div key={cv.id} className="card flex items-center justify-between gap-4"><div><p className="font-bold text-white">{cv.title}</p><p className="text-sm text-slate-500">{cv.file_name}</p></div><form action={deleteCvAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="cv_id" value={cv.id}/><button className="btn-secondary">Delete</button></form></div>)}{!cvs?.length&&<p className="text-slate-500">No CVs uploaded yet.</p>}</div></section>}

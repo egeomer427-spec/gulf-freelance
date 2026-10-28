@@ -12,7 +12,7 @@ export async function loginAction(formData: FormData) {
   const supabase = await createClient();
   if (!supabase) redirect(`/${locale}/login?error=Supabase%20is%20not%20configured`);
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) redirect(`/${locale}/login?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/${locale}/login?error=Unable%20to%20sign%20in%20with%20those%20credentials`);
   redirect(next.startsWith(`/${locale}/`) ? next : `/${locale}/dashboard`);
 }
 
@@ -29,7 +29,7 @@ export async function forgotPasswordAction(formData: FormData) {
   const supabase = await createClient();
   if (!supabase) redirect(`/${locale}/forgot-password?error=Supabase%20is%20not%20configured`);
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${siteUrl()}/auth/callback?next=/${locale}/update-password` });
-  if (error) redirect(`/${locale}/forgot-password?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/${locale}/forgot-password?error=Unable%20to%20process%20the%20request`);
   redirect(`/${locale}/forgot-password?sent=1`);
 }
 
@@ -40,6 +40,6 @@ export async function updatePasswordAction(formData: FormData) {
   const supabase = await createClient();
   if (!supabase) redirect(`/${locale}/update-password?error=Supabase%20is%20not%20configured`);
   const { error } = await supabase.auth.updateUser({ password });
-  if (error) redirect(`/${locale}/update-password?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/${locale}/update-password?error=Unable%20to%20update%20password`);
   redirect(`/${locale}/dashboard`);
 }

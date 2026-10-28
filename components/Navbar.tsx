@@ -19,7 +19,7 @@ export default async function Navbar({ locale: rawLocale }: { locale: string }) 
           {user && <Link href={`/${locale}/messages`} className="hover:text-white">{m.messages}</Link>}
         </nav>
         <details className="relative md:hidden">
-          <summary className="cursor-pointer list-none rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-200">Menu</summary>
+          <summary aria-label={m.menu} className="cursor-pointer list-none rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300">{m.menu}</summary>
           <nav className="absolute end-0 top-full z-50 mt-2 grid min-w-48 gap-1 rounded-lg border border-white/10 bg-slate-900 p-2 text-sm text-slate-200 shadow-xl">
             <Link href={`/${locale}/jobs`} className="rounded px-3 py-2 hover:bg-white/5">{m.jobs}</Link>
             <Link href={`/${locale}/services`} className="rounded px-3 py-2 hover:bg-white/5">{m.services}</Link>

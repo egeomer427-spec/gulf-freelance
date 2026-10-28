@@ -1,9 +1,11 @@
 import AdminListingModeration from "@/components/AdminListingModeration";
+import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth";
 import { normalizeLocale } from "@/lib/i18n";
 import { toggleSuspensionAction, updateReportAction, updateVerificationAction } from "./actions";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default async function Page({ params }: { params: Promise<{ locale: string }> }) {
   const locale = normalizeLocale((await params).locale);

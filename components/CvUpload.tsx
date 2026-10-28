@@ -35,7 +35,14 @@ export default function CvUpload() {
       setMessage("CV uploaded.");
       window.location.reload();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Upload failed.");
+      const localMessages = new Set([
+        "Choose a CV file.",
+        "CV must be 5 MB or smaller.",
+        "Only PDF or DOCX files are allowed.",
+        "Supabase is not configured.",
+        "Please sign in first.",
+      ]);
+      setMessage(error instanceof Error && localMessages.has(error.message) ? error.message : "Upload failed. Please try again.");
     } finally {
       setBusy(false);
     }

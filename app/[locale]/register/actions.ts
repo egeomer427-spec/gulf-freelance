@@ -11,6 +11,6 @@ export async function registerAction(formData: FormData) {
   const supabase = await createClient();
   if (!supabase) redirect(`/${locale}/register?error=Supabase%20is%20not%20configured`);
   const { error } = await supabase.auth.signUp({ email: parsed.data.email, password: parsed.data.password, options: { emailRedirectTo: `${siteUrl()}/auth/callback?next=/${locale}/dashboard`, data: { display_name: parsed.data.displayName, role: parsed.data.role } } });
-  if (error) redirect(`/${locale}/register?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/${locale}/register?error=Unable%20to%20create%20account%20with%20those%20details`);
   redirect(`/${locale}/login?message=${encodeURIComponent("Check your email to verify your account.")}`);
 }

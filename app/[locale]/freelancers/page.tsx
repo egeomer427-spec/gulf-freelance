@@ -3,4 +3,29 @@ import { normalizeLocale } from "@/lib/i18n";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import Link from "next/link";
 export const dynamic="force-dynamic";
-export default async function Page({params,searchParams}:{params:Promise<{locale:string}>;searchParams:Promise<Record<string,string|string[]|undefined>>}){const locale=normalizeLocale((await params).locale);const q=await searchParams;const query=typeof q.q==="string"?q.q.trim():"";let rows:any[]=[];if(isSupabaseConfigured()){const supabase=await createClient();if(supabase){let req=supabase.from("profiles").select("id,display_name,username,headline,bio,country,city,skills,verified").in("role",["freelancer","job_seeker"]).eq("is_suspended",false).limit(50);if(query)req=req.or(`display_name.ilike.%${query.replaceAll(",","")}%,headline.ilike.%${query.replaceAll(",","")}%`);const {data}=await req;rows=data||[]}}return <section className="mx-auto max-w-6xl px-4 py-12"><h1 className="text-3xl font-black text-white">Freelancers</h1><form className="card mt-6 flex gap-3"><input className="input" name="q" defaultValue={query} placeholder="Search name or skill"/><button className="btn-primary">Search</button></form><div className="mt-6 grid gap-4 md:grid-cols-3">{rows.map(p=><div className="card" key={p.id}><h2 className="text-lg font-bold text-white">{p.display_name||"Freelancer"} {p.verified?"✓":""}</h2><p className="mt-1 text-sm text-violet-300">{p.headline||"Independent professional"}</p><p className="mt-3 line-clamp-3 text-sm text-slate-400">{p.bio||"No bio yet."}</p><div className="mt-4 flex flex-wrap gap-2">{(p.skills||[]).slice(0,5).map((s:string)=><span key={s} className="rounded-full bg-white/5 px-2 py-1 text-xs text-slate-300">{s}</span>)}</div><Link href={`/${locale}/messages?with=${p.id}`} className="mt-5 inline-block text-sm font-bold text-emerald-300">Contact →</Link></div>)}{!rows.length&&<p className="text-slate-400">No freelancers found.</p>}</div></section>}
+export default async function Page({params,searchParams}:{params:Promise<{locale:string}>;searchParams:Promise<Record<string,string|string[]|undefined>>}){
+	const locale=normalizeLocale((await params).locale);
+	const q=await searchParams;
+	const query=typeof q.q==="string"?q.q.trim():"";
+	let rows:any[]=[];
+	if(isSupabaseConfigured()){
+		const supabase=await createClient();
+		if(supabase){
+			const base=supabase.from("profiles").select("id,display_name,username,headline,bio,country,city,skills,verified").in("role",["freelancer","job_seeker"]).eq("is_suspended",false);
+			if(query){
+				const term=query.replace(/[^\p{L}\p{N} +#.-]/gu,"").trim();
+				if(term){
+					const [textMatches,skillMatches]=await Promise.all([
+						base.or(`display_name.ilike.%${term}%,headline.ilike.%${term}%`).limit(50),
+						supabase.from("profiles").select("id,display_name,username,headline,bio,country,city,skills,verified").in("role",["freelancer","job_seeker"]).eq("is_suspended",false).contains("skills",[term]).limit(50),
+					]);
+					rows=[...new Map([...(textMatches.data||[]),...(skillMatches.data||[])].map(profile=>[profile.id,profile])).values()];
+				}
+			}else{
+				const {data}=await base.limit(50);
+				rows=data||[];
+			}
+		}
+	}
+	return <section className="mx-auto max-w-6xl px-4 py-12"><h1 className="text-3xl font-black text-white">Freelancers</h1><form className="card mt-6 flex gap-3"><input className="input" name="q" defaultValue={query} placeholder="Search name or skill"/><button className="btn-primary">Search</button></form><div className="mt-6 grid gap-4 md:grid-cols-3">{rows.map(p=><div className="card" key={p.id}><h2 className="text-lg font-bold text-white">{p.display_name||"Freelancer"} {p.verified?"✓":""}</h2><p className="mt-1 text-sm text-violet-300">{p.headline||"Independent professional"}</p><p className="mt-3 line-clamp-3 text-sm text-slate-400">{p.bio||"No bio yet."}</p><div className="mt-4 flex flex-wrap gap-2">{(p.skills||[]).slice(0,5).map((s:string)=><span key={s} className="rounded-full bg-white/5 px-2 py-1 text-xs text-slate-300">{s}</span>)}</div><Link href={`/${locale}/messages?with=${p.id}`} className="mt-5 inline-block text-sm font-bold text-emerald-300">Contact →</Link></div>)}{!rows.length&&<p className="text-slate-400">No freelancers found.</p>}</div></section>
+}

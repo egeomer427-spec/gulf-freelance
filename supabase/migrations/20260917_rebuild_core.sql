@@ -169,6 +169,81 @@ create or replace function public.is_admin() returns boolean
 language sql stable security definer set search_path = public
 as $$ select exists(select 1 from public.profiles p where p.id = auth.uid() and p.role='admin' and not p.is_suspended); $$;
 
+create or replace function public.prevent_profile_privilege_escalation() returns trigger
+language plpgsql security invoker set search_path = public
+as $$
+begin
+  if auth.uid() = old.id and not public.is_admin() and (
+    new.role is distinct from old.role or
+    new.verified is distinct from old.verified or
+    new.is_suspended is distinct from old.is_suspended
+  ) then
+    raise exception 'Profile privilege fields can only be changed by an admin';
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists profiles_protect_privileges on public.profiles;
+create trigger profiles_protect_privileges before update on public.profiles
+for each row execute function public.prevent_profile_privilege_escalation();
+
+create or replace function public.protect_message_updates() returns trigger
+language plpgsql security invoker set search_path = public
+as $$
+begin
+  if auth.uid() is null or old.sender_id = auth.uid() or old.is_read or not new.is_read or
+    new.conversation_id is distinct from old.conversation_id or
+    new.sender_id is distinct from old.sender_id or
+    new.body is distinct from old.body or
+    new.created_at is distinct from old.created_at then
+    raise exception 'Messages can only be marked read by their recipient';
+  end if;
+  if not exists (
+    select 1 from public.conversations c
+    where c.id = old.conversation_id and auth.uid() in (c.user_one,c.user_two)
+  ) then
+    raise exception 'Not a conversation participant';
+  end if;
+  new.read_at := coalesce(old.read_at, now());
+  return new;
+end; $$;
+
+drop trigger if exists messages_protect_updates on public.messages;
+create trigger messages_protect_updates before update on public.messages
+for each row execute function public.protect_message_updates();
+
+create or replace function public.protect_conversation_membership() returns trigger
+language plpgsql security invoker set search_path = public
+as $$
+begin
+  if new.user_one is distinct from old.user_one or new.user_two is distinct from old.user_two then
+    raise exception 'Conversation participants cannot be changed';
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists conversations_protect_membership on public.conversations;
+create trigger conversations_protect_membership before update on public.conversations
+for each row execute function public.protect_conversation_membership();
+
+create or replace function public.protect_application_identity() returns trigger
+language plpgsql security invoker set search_path = public
+as $$
+begin
+  if new.job_id is distinct from old.job_id or
+    new.applicant_id is distinct from old.applicant_id or
+    new.cv_id is distinct from old.cv_id or
+    new.cover_letter is distinct from old.cover_letter or
+    new.created_at is distinct from old.created_at then
+    raise exception 'Application details cannot be changed after submission';
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists applications_protect_identity on public.job_applications;
+create trigger applications_protect_identity before update on public.job_applications
+for each row execute function public.protect_application_identity();
+
 alter table public.profiles enable row level security;
 alter table public.jobs enable row level security;
 alter table public.services enable row level security;
@@ -182,18 +257,18 @@ alter table public.verification_requests enable row level security;
 
 -- Profiles
 create policy "profiles public read" on public.profiles for select using (not is_suspended or id = auth.uid() or public.is_admin());
-create policy "profiles own insert" on public.profiles for insert with check (id = auth.uid());
+create policy "profiles own insert" on public.profiles for insert with check (id = auth.uid() and role <> 'admin' and not verified and not is_suspended);
 create policy "profiles own update" on public.profiles for update using (id = auth.uid() or public.is_admin()) with check (id = auth.uid() or public.is_admin());
 
 -- Jobs
 create policy "jobs public read active" on public.jobs for select using (status='active' or employer_id=auth.uid() or public.is_admin());
-create policy "jobs employer insert" on public.jobs for insert with check (employer_id=auth.uid() and not exists(select 1 from public.profiles p where p.id=auth.uid() and p.is_suspended));
+create policy "jobs employer insert" on public.jobs for insert with check (employer_id=auth.uid() and (public.is_admin() or exists(select 1 from public.profiles p where p.id=auth.uid() and p.role='employer' and not p.is_suspended)));
 create policy "jobs employer update" on public.jobs for update using (employer_id=auth.uid() or public.is_admin()) with check (employer_id=auth.uid() or public.is_admin());
 create policy "jobs employer delete" on public.jobs for delete using (employer_id=auth.uid() or public.is_admin());
 
 -- Services
 create policy "services public read active" on public.services for select using (status='active' or seller_id=auth.uid() or public.is_admin());
-create policy "services seller insert" on public.services for insert with check (seller_id=auth.uid());
+create policy "services seller insert" on public.services for insert with check (seller_id=auth.uid() and (public.is_admin() or exists(select 1 from public.profiles p where p.id=auth.uid() and p.role='freelancer' and not p.is_suspended)));
 create policy "services seller update" on public.services for update using (seller_id=auth.uid() or public.is_admin()) with check (seller_id=auth.uid() or public.is_admin());
 create policy "services seller delete" on public.services for delete using (seller_id=auth.uid() or public.is_admin());
 
@@ -204,8 +279,8 @@ create policy "cvs owner or hiring employer read" on public.cvs for select using
     where a.cv_id=cvs.id and j.employer_id=auth.uid()
   )
 );
-create policy "cvs owner insert" on public.cvs for insert with check (user_id=auth.uid());
-create policy "cvs owner update" on public.cvs for update using (user_id=auth.uid()) with check (user_id=auth.uid());
+create policy "cvs owner insert" on public.cvs for insert with check (user_id=auth.uid() and split_part(file_path,'/',1)=user_id::text);
+create policy "cvs owner update" on public.cvs for update using (user_id=auth.uid()) with check (user_id=auth.uid() and split_part(file_path,'/',1)=user_id::text);
 create policy "cvs owner delete" on public.cvs for delete using (user_id=auth.uid());
 
 -- Applications
@@ -213,12 +288,14 @@ create policy "applications applicant or employer read" on public.job_applicatio
   applicant_id=auth.uid() or public.is_admin() or exists(select 1 from public.jobs j where j.id=job_id and j.employer_id=auth.uid())
 );
 create policy "applications applicant insert" on public.job_applications for insert with check (
-  applicant_id=auth.uid() and (cv_id is null or exists(select 1 from public.cvs c where c.id=cv_id and c.user_id=auth.uid()))
+  applicant_id=auth.uid() and
+  exists(select 1 from public.jobs j where j.id=job_id and j.status='active') and
+  (cv_id is null or exists(select 1 from public.cvs c where c.id=cv_id and c.user_id=auth.uid()))
 );
-create policy "applications employer or applicant update" on public.job_applications for update using (
-  applicant_id=auth.uid() or public.is_admin() or exists(select 1 from public.jobs j where j.id=job_id and j.employer_id=auth.uid())
+create policy "applications employer update" on public.job_applications for update using (
+  public.is_admin() or exists(select 1 from public.jobs j where j.id=job_id and j.employer_id=auth.uid())
 ) with check (
-  applicant_id=auth.uid() or public.is_admin() or exists(select 1 from public.jobs j where j.id=job_id and j.employer_id=auth.uid())
+  public.is_admin() or exists(select 1 from public.jobs j where j.id=job_id and j.employer_id=auth.uid())
 );
 
 -- Saved jobs
@@ -234,7 +311,7 @@ create policy "conversations participants update" on public.conversations for up
 -- Messages
 create policy "messages participants read" on public.messages for select using (exists(select 1 from public.conversations c where c.id=conversation_id and auth.uid() in (c.user_one,c.user_two)));
 create policy "messages participant insert" on public.messages for insert with check (sender_id=auth.uid() and exists(select 1 from public.conversations c where c.id=conversation_id and auth.uid() in (c.user_one,c.user_two)));
-create policy "messages participants update read state" on public.messages for update using (exists(select 1 from public.conversations c where c.id=conversation_id and auth.uid() in (c.user_one,c.user_two))) with check (exists(select 1 from public.conversations c where c.id=conversation_id and auth.uid() in (c.user_one,c.user_two)));
+create policy "messages recipients update read state" on public.messages for update using (sender_id <> auth.uid() and not is_read and exists(select 1 from public.conversations c where c.id=conversation_id and auth.uid() in (c.user_one,c.user_two))) with check (sender_id <> auth.uid() and is_read and exists(select 1 from public.conversations c where c.id=conversation_id and auth.uid() in (c.user_one,c.user_two)));
 
 -- Moderation
 create policy "reports own or admin read" on public.reports for select using (reporter_id=auth.uid() or public.is_admin());
@@ -258,7 +335,9 @@ using (
       select 1 from public.cvs c
       join public.job_applications a on a.cv_id=c.id
       join public.jobs j on j.id=a.job_id
-      where c.file_path=name and j.employer_id=auth.uid()
+      where c.file_path=name and c.user_id=a.applicant_id
+        and (storage.foldername(name))[1]=a.applicant_id::text
+        and j.employer_id=auth.uid()
     )
   )
 );

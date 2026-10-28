@@ -10,6 +10,15 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     if (supabase) await supabase.auth.exchangeCodeForSession(code);
   }
-  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/en/dashboard";
-  return NextResponse.redirect(new URL(safeNext, siteUrl()));
+  const site = new URL(siteUrl());
+  let destination: URL;
+  try {
+    destination = new URL(next, site);
+  } catch {
+    destination = new URL("/en/dashboard", site);
+  }
+  if (destination.origin !== site.origin || destination.username || destination.password) {
+    destination = new URL("/en/dashboard", site);
+  }
+  return NextResponse.redirect(destination);
 }
